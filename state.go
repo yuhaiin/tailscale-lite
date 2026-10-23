@@ -15,6 +15,7 @@ import (
 
 // diskState is private state, including secrets. Never log or expose it.
 type diskState struct {
+	BackendLogID string `json:"backend_log_id"`
 	MachineKey key.MachinePrivate `json:"machine_key"`
 	Persist    persist.Persist    `json:"persist"`
 }
