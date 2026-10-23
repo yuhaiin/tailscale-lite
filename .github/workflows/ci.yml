@@ -18,7 +18,6 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-          cache: true
       - name: Resolve module dependencies
         run: |
           export GOFLAGS='-tags=ts_omit_netstack,ts_omit_gro'
