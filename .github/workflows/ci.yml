@@ -43,6 +43,10 @@ jobs:
         run: |
           export GOFLAGS='-tags=ts_omit_netstack,ts_omit_gro'
           go test -race -count=1 ./...
+      - name: Validate fork Underlay fallback without routes
+        run: |
+          export GOFLAGS='-tags=ts_omit_netstack,ts_omit_gro'
+          go test -race -count=2 -run TestUserDialWithoutRoutesHonorsExplicitUnderlay tailscale.com/net/tsdial
       - name: Local control/DERP integration
         run: |
           export GOFLAGS='-tags=ts_omit_netstack,ts_omit_gro,integration'
