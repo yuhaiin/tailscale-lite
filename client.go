@@ -244,7 +244,14 @@ func (c *Client) SetControlClientStatus(_ controlclient.Client, s controlclient.
 		}
 	}
 	mustApply := s.NetMap != nil && s.LoggedIn && s.Err == nil
+	loggedOut := !s.LoggedIn
 	c.mu.Unlock()
+	if loggedOut {
+		// Never retain a previously authorized route after logout,
+		// revoked machine authorization, or auth state reset.
+		c.deactivateNetMap()
+		return
+	}
 	if !mustApply {
 		return
 	}
