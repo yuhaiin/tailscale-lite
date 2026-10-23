@@ -14,6 +14,10 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Resolve module dependencies
+        run: |
+          export GOFLAGS='-tags=ts_omit_netstack,ts_omit_gro'
+          go mod tidy
       - name: Verify dependency boundary (no gVisor, tsnet, ipnlocal)
         run: |
           set -euo pipefail
