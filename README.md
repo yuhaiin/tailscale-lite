@@ -35,7 +35,7 @@ The explicit `Underlay` is the fork's per-instance transport contract: control H
 - Missing/invalid mapping, expired keys and Tailnet Lock requirements are intended to fail closed.
 - All IPv4/IPv6 application sockets are handled by the host stack; this module has no DNS listener.
 - Peers are initially filtered for expiration, jail and unsigned-only access; the remaining Tailscale capability/TKA semantics require further validation.
-- Unimplemented: TKA verification, fully integrated MagicDNS and configuration migration from `tailscaled.state`, production interoperability testing, gVisor-free binary size comparison.
+- Unimplemented: TKA verification, fully integrated MagicDNS and production interoperability testing. Selected legacy `tailscaled.state` machine and node identities can be migrated with `MigrateLegacyState`; malformed or ambiguous profiles fail closed.
 
 ### Development
 
@@ -49,6 +49,10 @@ Tailscale's currently pinned fork is the same one used by Yuhaiin. Upstream code
 ## Design
 
 See [docs/architecture.md](docs/architecture.md).
+
+### Existing tsnet identity migration
+
+Before calling `New`, the embedding application may call `MigrateLegacyState(oldStateFile, newStateFile, controlURL)`. It reads the private `tailscaled.state` FileStore, checks the currently selected profile and control URL, and imports both machine and node keys to the private atomic `lite.json` format. The original FileStore is kept for rollback. Missing, logged-out, ambiguous, insecurely permissioned or cross-control identities are rejected rather than silently enrolling a different Tailnet node. Integration with an actual previously enrolled node still requires live validation.
 
 ### Custom underlay isolation
 
