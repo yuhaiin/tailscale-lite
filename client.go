@@ -179,6 +179,20 @@ func New(cfg Config) (_ *Client, err error) {
 		c.bus.Close()
 		return nil, fmt.Errorf("control client: %w", err)
 	}
+	// Relay selection, NAT probing and the home DERP ID must flow back to
+	// control. Otherwise peers learn our key but have no UDP/DERP route.
+	c.magic.SetNetInfoCallback(func(ni *tailcfg.NetInfo) {
+		if ni == nil {
+			return
+		}
+		c.mu.Lock()
+		ctl := c.control
+		closed := c.closed
+		c.mu.Unlock()
+		if !closed && ctl != nil {
+			ctl.SetNetInfo(ni)
+		}
+	})
 	c.engine.SetStatusCallback(func(s *wgengine.Status, e error) {
 		if e != nil || s == nil {
 			return
