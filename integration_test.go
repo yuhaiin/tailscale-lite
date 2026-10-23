@@ -64,6 +64,9 @@ func TestLocalControlRegistration(t *testing.T) {
    Hostname:fmt.Sprintf("lite%d",i),
    ControlURL:control.HTTPTestServer.URL,
    StatePath:filepath.Join(t.TempDir(),"identity.json"),
+   Logf:func(format string,args ...any){
+    t.Logf("node%d: %s",i,fmt.Sprintf(format,args...))
+   },
   })
   if err!=nil{t.Fatal(err)}
   clients[i]=client
