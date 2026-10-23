@@ -55,9 +55,8 @@ func(t *routeTable) find(ip netip.Addr)(routeEntry,bool){
  found:=false
  for _,r:=range t.entries {
   if !r.prefix.Contains(ip){continue}
-  if found && r.prefix.Bits()==best.prefix.Bits() && r.key!=best.key{return routeEntry{},false}
-  if !found {best=r;found=true;continue}
-  if r.prefix.Bits()<best.prefix.Bits(){break}
+  if !found || r.prefix.Bits()>best.prefix.Bits(){best=r;found=true;continue}
+  if r.prefix.Bits()==best.prefix.Bits() && r.key!=best.key{return routeEntry{},false}
  }
  return best,found
 }
