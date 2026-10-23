@@ -48,3 +48,14 @@ func TestStateRejectsSymlink(t *testing.T) {
 		t.Fatal("symlink accepted")
 	}
 }
+
+func TestStateOwnership(t *testing.T) {
+ path:=filepath.Join(t.TempDir(),"identity.json")
+ release,err:=claimStatePath(path)
+ if err!=nil{t.Fatal(err)}
+ if _,err:=claimStatePath(path);err==nil{t.Fatal("duplicate client acquired the same state")}
+ release()
+ release2,err:=claimStatePath(path)
+ if err!=nil{t.Fatalf("released state could not be reclaimed: %v",err)}
+ release2()
+}
