@@ -12,6 +12,8 @@ require (
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/akutz/memconn v0.1.0 // indirect
 	github.com/axiomhq/hyperloglog v0.2.6 // indirect
+	github.com/benbjohnson/immutable v0.4.3 // indirect
+	github.com/bradfitz/reco v0.0.0-20260929154613-b883fbd17e3f // indirect
 	github.com/coder/websocket v1.8.15 // indirect
 	github.com/creachadair/msync v0.10.1 // indirect
 	github.com/dblohm7/wingoes v0.0.0-20260526185140-fb298caac7ca // indirect
