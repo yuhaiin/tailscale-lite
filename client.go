@@ -18,6 +18,7 @@ import (
 	"tailscale.com/net/netmon"
 	"tailscale.com/net/netns"
 	"tailscale.com/net/tsdial"
+	"tailscale.com/net/tstun"
 	"tailscale.com/tailcfg"
 	"tailscale.com/types/key"
 	"tailscale.com/types/logger"
@@ -124,13 +125,17 @@ func New(cfg Config) (_ *Client, err error) {
 	c.dialer.Underlay = cfg.Underlay
 	c.dialer.SetBus(c.bus)
 	h := health.NewTracker(c.bus)
+	var wrappedTun *tstun.Wrapper
 	c.engine, err = wgengine.NewUserspaceEngine(cfg.Logf, wgengine.Config{
 		Tun: cfg.Device, NetMon: c.monitor, Dialer: c.dialer,
 		HealthTracker: h, Metrics: &usermetric.Registry{}, EventBus: c.bus,
 		DERPAppName: "yuhaiin/tailscale-lite",
 		SetSubsystem: func(s any) {
-			if ms, ok := s.(*magicsock.Conn); ok {
-				c.magic = ms
+			switch sub := s.(type) {
+			case *magicsock.Conn:
+				c.magic = sub
+			case *tstun.Wrapper:
+				wrappedTun = sub
 			}
 		},
 	})
@@ -139,11 +144,11 @@ func New(cfg Config) (_ *Client, err error) {
 		c.bus.Close()
 		return nil, fmt.Errorf("wireguard engine: %w", err)
 	}
-	if c.magic == nil {
+	if c.magic == nil || wrappedTun == nil {
 		c.engine.Close()
 		c.monitor.Close()
 		c.bus.Close()
-		return nil, errors.New("tailscale-lite: engine did not expose magicsock")
+		return nil, errors.New("tailscale-lite: engine did not expose magicsock and TUN wrapper")
 	}
 	c.engine.SetPeerByIPPacketFunc(c.lookupPeerKey)
 	c.engine.SetPeerForIPFunc(c.lookupPeer)
@@ -179,6 +184,10 @@ func New(cfg Config) (_ *Client, err error) {
 			control.UpdateEndpoints(s.LocalAddrs)
 		}
 	})
+	// Tailscale corks all TUN queues until the caller wires up its
+	// subsystems. Without Start, control login succeeds but WireGuard
+	// packets never leave the host stack.
+	wrappedTun.Start()
 	c.control.Login(controlclient.LoginDefault)
 	return c, nil
 }
