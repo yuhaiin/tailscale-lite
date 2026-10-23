@@ -31,6 +31,14 @@ jobs:
             echo 'Forbidden dependency included in tailscale-lite'
             exit 1
           fi
+      - name: Check gofmt
+        run: |
+          set -euo pipefail
+          unformatted="$(gofmt -l ./*.go)"
+          if [ -n "$unformatted" ]; then
+            echo "$unformatted"
+            exit 1
+          fi
       - name: Test with race detector
         run: |
           export GOFLAGS='-tags=ts_omit_netstack,ts_omit_gro'
