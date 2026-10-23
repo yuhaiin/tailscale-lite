@@ -5,7 +5,7 @@ go 1.27.2
 require (
 	github.com/tailscale/wireguard-go v0.0.0-20261002162406-18e99eba5393
 	go4.org/netipx v0.0.0-20260823151212-3075585bcbeb
-	tailscale.com v1.104.2
+	tailscale.com v1.104.1
 )
 
 require (
