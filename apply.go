@@ -29,6 +29,9 @@ func (c *Client) applyNetMap(nm *netmap.NetworkMap) error {
 		c.mu.Unlock()
 		c.engine.SetFilter(f)
 		c.magic.SetFilter(f)
+		if c.dns != nil {
+			_ = c.dns.Set(dns.Config{})
+		}
 		return err
 	}
 	if nm == nil || !nm.SelfNode.Valid() {
@@ -49,6 +52,10 @@ func (c *Client) applyNetMap(nm *netmap.NetworkMap) error {
 		return deny(err)
 	}
 	newNames := buildNames(nm, newRoutes)
+	dnsCfg, err := dnsConfigForNetMap(nm, newRoutes)
+	if err != nil {
+		return deny(err)
+	}
 	localBuilder := new(netipx.IPSetBuilder)
 	for _, p := range addrs {
 		if !p.IsValid() || !p.IsSingleIP() {
@@ -95,7 +102,7 @@ func (c *Client) applyNetMap(nm *netmap.NetworkMap) error {
 		c.engine.SyncDevicePeer(pub)
 	}
 	cfg := &wgcfg.Config{PrivateKey: priv, Addresses: append([]netip.Prefix(nil), addrs...)}
-	if err := c.engine.Reconfig(cfg, &router.Config{LocalAddrs: append([]netip.Prefix(nil), addrs...)}, &dns.Config{}); err != nil && !errors.Is(err, wgengine.ErrNoChanges) {
+	if err := c.engine.Reconfig(cfg, &router.Config{LocalAddrs: append([]netip.Prefix(nil), addrs...)}, dnsCfg); err != nil && !errors.Is(err, wgengine.ErrNoChanges) {
 		return deny(fmt.Errorf("reconfigure WireGuard: %w", err))
 	}
 	c.mu.Lock()
