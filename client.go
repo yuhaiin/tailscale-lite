@@ -21,6 +21,7 @@ import (
 	"tailscale.com/tailcfg"
 	"tailscale.com/types/key"
 	"tailscale.com/types/logger"
+ "tailscale.com/types/logid"
 	"tailscale.com/util/eventbus"
 	"tailscale.com/util/usermetric"
 	"tailscale.com/wgengine"
@@ -96,8 +97,13 @@ func New(cfg Config) (_ *Client, err error) {
 	if err != nil {
 		return nil, err
 	}
-	if state.MachineKey.IsZero() {
-		state.MachineKey = key.NewMachine()
+	if state.MachineKey.IsZero() || state.BackendLogID == "" {
+		if state.MachineKey.IsZero() {state.MachineKey = key.NewMachine()}
+  if state.BackendLogID == "" {
+   id,err := logid.NewPrivateID()
+   if err != nil {return nil,fmt.Errorf("generate backend ID: %w",err)}
+   state.BackendLogID = id.Public().String()
+  }
 		if err := writeState(cfg.StatePath, state); err != nil {
 			return nil, err
 		}
