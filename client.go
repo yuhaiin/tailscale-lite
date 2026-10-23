@@ -72,24 +72,26 @@ type Status struct {
 
 // Client owns one independent control session and WireGuard engine.
 type Client struct {
-	mu           sync.Mutex
-	applyMu      sync.Mutex
-	cfg          Config
-	status       Status
-	routes       *routeTable
-	names        *nameTable
-	state        diskState
-	control      *controlclient.Auto
-	engine       wgengine.Engine
-	magic        *magicsock.Conn
-	monitor      *netmon.Monitor
-	bus          *eventbus.Bus
-	dialer       *tsdial.Dialer
-	dns          *dns.Manager
-	stateRelease func()
-	ready        chan struct{}
-	readyOnce    sync.Once
-	closed       bool
+	mu                sync.Mutex
+	applyMu           sync.Mutex
+	cfg               Config
+	status            Status
+	routes            *routeTable
+	names             *nameTable
+	state             diskState
+	control           *controlclient.Auto
+	engine            wgengine.Engine
+	magic             *magicsock.Conn
+	monitor           *netmon.Monitor
+	bus               *eventbus.Bus
+	dialer            *tsdial.Dialer
+	dns               *dns.Manager
+	stateRelease      func()
+	ready             chan struct{}
+	readyOnce         sync.Once
+	transportReady    chan struct{}
+	transportReadySet bool
+	closed            bool
 }
 
 // New starts an isolated Tailnet client. Call WaitReady to wait for an
@@ -139,7 +141,10 @@ func New(cfg Config) (_ *Client, err error) {
 			return nil, err
 		}
 	}
-	c := &Client{cfg: cfg, state: state, ready: make(chan struct{}), routes: newRouteTable(), names: newNameTable(""), stateRelease: release}
+	c := &Client{
+		cfg: cfg, state: state, ready: make(chan struct{}), transportReady: make(chan struct{}),
+		routes: newRouteTable(), names: newNameTable(""), stateRelease: release,
+	}
 	c.bus = eventbus.New()
 	c.monitor, err = netmon.New(c.bus, cfg.Logf)
 	if err != nil {
@@ -252,6 +257,14 @@ func New(cfg Config) (_ *Client, err error) {
 		c.mu.Unlock()
 		if !closed && control != nil {
 			control.UpdateEndpoints(s.LocalAddrs)
+			if len(s.LocalAddrs) > 0 || s.DERPs > 0 {
+				c.mu.Lock()
+				if !c.closed && c.status.Ready && !c.transportReadySet {
+					c.transportReadySet = true
+					close(c.transportReady)
+				}
+				c.mu.Unlock()
+			}
 		}
 	})
 	// Tailscale corks all TUN queues until the caller wires up its
@@ -342,6 +355,43 @@ func (c *Client) WaitReady(ctx context.Context) error {
 	}
 }
 
+// WaitTransportReady waits until the initial NetMap is applied and magicsock
+// has discovered at least one direct endpoint or connected to a DERP relay.
+// This lets callers avoid exposing a newly registered peer route before the
+// client has a network path to send the first WireGuard handshake.
+func (c *Client) WaitTransportReady(ctx context.Context) error {
+	if err := c.WaitReady(ctx); err != nil {
+		return err
+	}
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return errors.New("tailscale-lite: closed")
+	}
+	engine := c.engine
+	c.mu.Unlock()
+	if engine != nil {
+		engine.RequestStatus()
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-c.transportReady:
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		if c.closed {
+			return errors.New("tailscale-lite: closed")
+		}
+		if !c.transportReadySet {
+			return errors.New("tailscale-lite: closed")
+		}
+		if !c.status.Ready {
+			return errors.New("tailscale-lite: not ready")
+		}
+		return nil
+	}
+}
+
 // Snapshot returns status with its address slice owned by the caller.
 func (c *Client) Snapshot() Status {
 	c.mu.Lock()
@@ -377,6 +427,9 @@ func (c *Client) Close() error {
 	release := c.stateRelease
 	c.stateRelease = nil
 	c.readyOnce.Do(func() { close(c.ready) })
+	if !c.transportReadySet {
+		close(c.transportReady)
+	}
 	c.mu.Unlock()
 	c.applyMu.Unlock()
 	if ctl != nil {

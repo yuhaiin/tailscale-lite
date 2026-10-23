@@ -80,6 +80,9 @@ func TestLocalControlRegistration(t *testing.T) {
 		if err := client.WaitReady(ctx); err != nil {
 			t.Fatalf("node %d: %v; status: %+v", i, err, client.Snapshot())
 		}
+		if err := client.WaitTransportReady(ctx); err != nil {
+			t.Fatalf("node %d transport: %v; status: %+v", i, err, client.Snapshot())
+		}
 		s := client.Snapshot()
 		if !s.LoggedIn || !s.Ready || len(s.Addresses) == 0 {
 			t.Fatalf("node %d: invalid status %+v", i, s)
