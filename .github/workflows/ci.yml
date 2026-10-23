@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Verify dependency boundary (no gVisor, tsnet, ipnlocal)
+        run: |
+          set -euo pipefail
+          export GOFLAGS='-tags=ts_omit_netstack,ts_omit_gro'
+          go list -deps ./... > /tmp/deps
+          if grep -E '^(gvisor.dev/gvisor|tailscale.com/tsnet|tailscale.com/ipn/ipnlocal)(/|$)' /tmp/deps; then
+            echo 'Forbidden dependency included in tailscale-lite'
+            exit 1
+          fi
+      - name: Test with race detector
+        run: |
+          export GOFLAGS='-tags=ts_omit_netstack,ts_omit_gro'
+          go test -race -count=1 ./...
+      - name: Cross compile library
+        run: |
+          export GOFLAGS='-tags=ts_omit_netstack,ts_omit_gro'
+          for target in linux/amd64 darwin/arm64 windows/amd64 android/arm64; do
+            GOOS="${target%/*}" GOARCH="${target#*/}" CGO_ENABLED=0 go build ./...
+          done
