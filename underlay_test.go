@@ -10,7 +10,7 @@ import (
 func TestUnderlayFailsClosed(t *testing.T) {
 	for _, tc := range []struct {
 		name string
-		cfg Config
+		cfg  Config
 		want string
 	}{
 		{name: "require underlay", cfg: Config{RequireUnderlay: true}, want: "required"},

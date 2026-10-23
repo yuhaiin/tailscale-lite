@@ -22,7 +22,7 @@ import (
 	"tailscale.com/tailcfg"
 	"tailscale.com/types/key"
 	"tailscale.com/types/logger"
- "tailscale.com/types/logid"
+	"tailscale.com/types/logid"
 	"tailscale.com/util/eventbus"
 	"tailscale.com/util/usermetric"
 	"tailscale.com/wgengine"
@@ -44,7 +44,7 @@ type Config struct {
 	// Set this for embedded proxy use where every control/DERP/UDP socket
 	// must follow the host's outbound routing policy.
 	RequireUnderlay bool
-	Logf       logger.Logf
+	Logf            logger.Logf
 	// OnAddresses configures the host IP stack with addresses assigned by control.
 	// It is invoked before the first WireGuard configuration is applied.
 	OnAddresses func([]netip.Prefix) error
@@ -64,23 +64,23 @@ type Status struct {
 
 // Client owns one independent control session and WireGuard engine.
 type Client struct {
-	mu        sync.Mutex
-	applyMu   sync.Mutex
-	cfg       Config
-	status    Status
-	routes    *routeTable
-	names     *nameTable
-	state     diskState
-	control   *controlclient.Auto
-	engine    wgengine.Engine
-	magic     *magicsock.Conn
-	monitor   *netmon.Monitor
-	bus       *eventbus.Bus
-	dialer    *tsdial.Dialer
+	mu           sync.Mutex
+	applyMu      sync.Mutex
+	cfg          Config
+	status       Status
+	routes       *routeTable
+	names        *nameTable
+	state        diskState
+	control      *controlclient.Auto
+	engine       wgengine.Engine
+	magic        *magicsock.Conn
+	monitor      *netmon.Monitor
+	bus          *eventbus.Bus
+	dialer       *tsdial.Dialer
 	stateRelease func()
-	ready     chan struct{}
-	readyOnce sync.Once
-	closed    bool
+	ready        chan struct{}
+	readyOnce    sync.Once
+	closed       bool
 }
 
 // New starts an isolated Tailnet client. Call WaitReady to wait for an
@@ -100,27 +100,37 @@ func New(cfg Config) (_ *Client, err error) {
 		cfg.ControlURL = "https://controlplane.tailscale.com"
 	}
 	if cfg.Logf == nil {
-  cfg.Logf = logger.Discard
- }
- release,err:=claimStatePath(cfg.StatePath)
- if err!=nil{return nil,err}
- defer func(){if err!=nil{release()}}()
- state,err:=readState(cfg.StatePath)
+		cfg.Logf = logger.Discard
+	}
+	release, err := claimStatePath(cfg.StatePath)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err != nil {
+			release()
+		}
+	}()
+	state, err := readState(cfg.StatePath)
 	if err != nil {
 		return nil, err
 	}
 	if state.MachineKey.IsZero() || state.BackendLogID == "" {
-		if state.MachineKey.IsZero() {state.MachineKey = key.NewMachine()}
-  if state.BackendLogID == "" {
-   id,err := logid.NewPrivateID()
-   if err != nil {return nil,fmt.Errorf("generate backend ID: %w",err)}
-   state.BackendLogID = id.Public().String()
-  }
+		if state.MachineKey.IsZero() {
+			state.MachineKey = key.NewMachine()
+		}
+		if state.BackendLogID == "" {
+			id, err := logid.NewPrivateID()
+			if err != nil {
+				return nil, fmt.Errorf("generate backend ID: %w", err)
+			}
+			state.BackendLogID = id.Public().String()
+		}
 		if err := writeState(cfg.StatePath, state); err != nil {
 			return nil, err
 		}
 	}
-	c := &Client{cfg: cfg, state: state, ready: make(chan struct{}), routes: newRouteTable(), names: newNameTable(""), stateRelease:release}
+	c := &Client{cfg: cfg, state: state, ready: make(chan struct{}), routes: newRouteTable(), names: newNameTable(""), stateRelease: release}
 	c.bus = eventbus.New()
 	c.monitor, err = netmon.New(c.bus, cfg.Logf)
 	if err != nil {
@@ -325,9 +335,9 @@ func (c *Client) Close() error {
 	engine := c.engine
 	monitor := c.monitor
 	bus := c.bus
- release:=c.stateRelease
- c.stateRelease=nil
- c.readyOnce.Do(func() { close(c.ready) })
+	release := c.stateRelease
+	c.stateRelease = nil
+	c.readyOnce.Do(func() { close(c.ready) })
 	c.mu.Unlock()
 	c.applyMu.Unlock()
 	if ctl != nil {
@@ -340,10 +350,12 @@ func (c *Client) Close() error {
 		monitor.Close()
 	}
 	if bus != nil {
-  bus.Close()
- }
- if release!=nil{release()}
- return nil
+		bus.Close()
+	}
+	if release != nil {
+		release()
+	}
+	return nil
 }
 
 // Closing a client is final. Another instance may load the same state only

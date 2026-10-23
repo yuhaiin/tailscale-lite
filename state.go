@@ -8,7 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
- "sync"
+	"sync"
 
 	"tailscale.com/types/key"
 	"tailscale.com/types/persist"
@@ -16,9 +16,9 @@ import (
 
 // diskState is private state, including secrets. Never log or expose it.
 type diskState struct {
-	BackendLogID string `json:"backend_log_id"`
-	MachineKey key.MachinePrivate `json:"machine_key"`
-	Persist    persist.Persist    `json:"persist"`
+	BackendLogID string             `json:"backend_log_id"`
+	MachineKey   key.MachinePrivate `json:"machine_key"`
+	Persist      persist.Persist    `json:"persist"`
 }
 
 func readState(path string) (diskState, error) {
@@ -102,29 +102,30 @@ func bytesReader(b []byte) io.Reader { return &byteReader{b: b} }
 
 var _ = rand.Reader
 
-
 // activeStateFiles protects against two nodes in this process racing to
 // mutate the same persistent node identity. Cross-process locking still
 // requires integration with the host's storage supervisor.
-var activeStateFiles=struct{
- sync.Mutex
- paths map[string]bool
-}{paths:make(map[string]bool)}
+var activeStateFiles = struct {
+	sync.Mutex
+	paths map[string]bool
+}{paths: make(map[string]bool)}
 
-func claimStatePath(path string)(func(),error){
- absolute,err:=filepath.Abs(path)
- if err!=nil{return nil,fmt.Errorf("canonical state path: %w",err)}
- absolute=filepath.Clean(absolute)
- activeStateFiles.Lock()
- if activeStateFiles.paths[absolute] {
-  activeStateFiles.Unlock()
-  return nil,errors.New("tailscale-lite: identity state already in use")
- }
- activeStateFiles.paths[absolute]=true
- activeStateFiles.Unlock()
- return func(){
-  activeStateFiles.Lock()
-  delete(activeStateFiles.paths,absolute)
-  activeStateFiles.Unlock()
- },nil
+func claimStatePath(path string) (func(), error) {
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return nil, fmt.Errorf("canonical state path: %w", err)
+	}
+	absolute = filepath.Clean(absolute)
+	activeStateFiles.Lock()
+	if activeStateFiles.paths[absolute] {
+		activeStateFiles.Unlock()
+		return nil, errors.New("tailscale-lite: identity state already in use")
+	}
+	activeStateFiles.paths[absolute] = true
+	activeStateFiles.Unlock()
+	return func() {
+		activeStateFiles.Lock()
+		delete(activeStateFiles.paths, absolute)
+		activeStateFiles.Unlock()
+	}, nil
 }
