@@ -75,6 +75,30 @@ jobs:
           echo "::group::tsnet versus lite"
           sed -n '1,80p' size-results/compare.txt
           echo "::endgroup::"
+      - name: Checkout yuhaiin main for whole-program baseline
+        uses: actions/checkout@v4
+        with:
+          repository: yuhaiin/yuhaiin
+          ref: main
+          path: yuhaiin
+      - name: Build and profile actual yuhaiin binary (best effort)
+        shell: bash
+        run: |
+          set -u
+          cd yuhaiin
+          CGO_ENABLED=0 go build -mod=mod -o ../size-results/yuhaiin ./cmd/yuhaiin
+          result=$?
+          cd ..
+          if [ "$result" != 0 ]; then
+            echo "Full yuhaiin CGO-disabled build unavailable in this environment (exit $result)." | tee size-results/yuhaiin-build-note.txt
+            exit 0
+          fi
+          stat -c '%n %s bytes' size-results/yuhaiin | tee -a size-results/sizes.txt
+          gsa -f text --hide-sections --hide-std size-results/yuhaiin > size-results/yuhaiin-gsa.txt
+          gsa -f json --compact -o size-results/yuhaiin-gsa.json size-results/yuhaiin
+          echo "::group::actual yuhaiin binary top packages"
+          sed -n '1,95p' size-results/yuhaiin-gsa.txt
+          echo "::endgroup::"
       - name: Upload inspectable size data
         uses: actions/upload-artifact@v4
         with:
@@ -84,4 +108,5 @@ jobs:
             size-results/*-gsa.txt
             size-results/*-gsa.json
             size-results/compare.txt
+            size-results/yuhaiin-build-note.txt
           retention-days: 14
