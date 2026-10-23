@@ -44,7 +44,7 @@ GOFLAGS='-tags=ts_omit_netstack,ts_omit_gro' go test -race ./...
 GOFLAGS='-tags=ts_omit_netstack,ts_omit_gro' go list -deps ./... | grep '^gvisor.dev/gvisor' && exit 1
 ```
 
-This module pins the official upstream Tailscale commit `e9d5cdc3231e` via a direct `tailscale.com` requirement. The old Asutorufa fork and module-level `replace` are not used. Follow the BSD-3-Clause upstream license for Tailscale and relevant dependency licenses.
+This module directly depends on the official stable `tailscale.com v1.104.2` release. The old Asutorufa fork and module-level `replace` are not used. Follow the BSD-3-Clause upstream license for Tailscale and relevant dependency licenses.
 
 ## Design
 
