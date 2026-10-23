@@ -72,6 +72,7 @@ type Client struct {
 	monitor   *netmon.Monitor
 	bus       *eventbus.Bus
 	dialer    *tsdial.Dialer
+	stateRelease func()
 	ready     chan struct{}
 	readyOnce sync.Once
 	closed    bool
@@ -91,9 +92,12 @@ func New(cfg Config) (_ *Client, err error) {
 		cfg.ControlURL = "https://controlplane.tailscale.com"
 	}
 	if cfg.Logf == nil {
-		cfg.Logf = logger.Discard
-	}
-	state, err := readState(cfg.StatePath)
+  cfg.Logf = logger.Discard
+ }
+ release,err:=claimStatePath(cfg.StatePath)
+ if err!=nil{return nil,err}
+ defer func(){if err!=nil{release()}}()
+ state,err:=readState(cfg.StatePath)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +112,7 @@ func New(cfg Config) (_ *Client, err error) {
 			return nil, err
 		}
 	}
-	c := &Client{cfg: cfg, state: state, ready: make(chan struct{}), routes: newRouteTable(), names: newNameTable("")}
+	c := &Client{cfg: cfg, state: state, ready: make(chan struct{}), routes: newRouteTable(), names: newNameTable(""), stateRelease:release}
 	c.bus = eventbus.New()
 	c.monitor, err = netmon.New(c.bus, cfg.Logf)
 	if err != nil {
@@ -284,7 +288,9 @@ func (c *Client) Close() error {
 	engine := c.engine
 	monitor := c.monitor
 	bus := c.bus
-	c.readyOnce.Do(func() { close(c.ready) })
+ release:=c.stateRelease
+ c.stateRelease=nil
+ c.readyOnce.Do(func() { close(c.ready) })
 	c.mu.Unlock()
 	c.applyMu.Unlock()
 	if ctl != nil {
@@ -297,9 +303,10 @@ func (c *Client) Close() error {
 		monitor.Close()
 	}
 	if bus != nil {
-		bus.Close()
-	}
-	return nil
+  bus.Close()
+ }
+ if release!=nil{release()}
+ return nil
 }
 
 // Closing a client is final. Another instance may load the same state only
