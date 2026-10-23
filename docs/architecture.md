@@ -26,3 +26,18 @@ The control plane is managed directly by controlclient.Auto. The adapter applies
 7. Switch Yuhaiin's outbound behind a feature flag only after the tests and benchmarking pass.
 
 Not all properties listed here have been validated. Keeping incomplete behavior explicit is preferable to silently weakening the security model.
+
+
+## Transition away from the Asutorufa fork
+
+The previous fork added per-instance transport injection for control HTTP/Noise,
+DERP, STUN, discovery and UDP sockets. That functionality does not exist in
+official upstream at the pinned commit. Removing the Go module replace is
+supported for the *system-underlay* client only, not for Yuhaiin's custom
+outbound. A non-nil `Config.Underlay` is explicitly refused with
+`ErrCustomUnderlayUnsupported`, before any network or storage side effects.
+
+Do not relax this error into a silent system-network fallback. For a production
+replacement, implement the necessary instance-level hooks (or independently
+owned transport modules), validate all underlay socket operations with an
+isolated fake transport, and verify routes cannot escape the configured proxy.

@@ -16,7 +16,6 @@ import (
 	"tailscale.com/control/controlclient"
 	"tailscale.com/health"
 	"tailscale.com/net/netmon"
-	"tailscale.com/net/netns"
 	"tailscale.com/net/tsdial"
 	"tailscale.com/tailcfg"
 	"tailscale.com/types/key"
@@ -38,7 +37,7 @@ type Config struct {
 	AuthKey    string
 	ControlURL string
 	StatePath  string
-	Underlay   *netns.Underlay
+	Underlay   *Underlay
 	Logf       logger.Logf
 	// OnAddresses configures the host IP stack with addresses assigned by control.
 	// It is invoked before the first WireGuard configuration is applied.
@@ -82,6 +81,12 @@ type Client struct {
 // authorized NetMap. A host-supplied Device is mandatory; nil would silently
 // create Tailscale's fake TUN and black-hole application packets.
 func New(cfg Config) (_ *Client, err error) {
+    // The upstream transport has no per-instance underlay injection points.
+    // Reject requests before allocating resources: using system sockets here
+    // would silently escape the embedding application's outbound policy.
+    if cfg.Underlay != nil {
+        return nil, ErrCustomUnderlayUnsupported
+    }
 	if cfg.Device == nil {
 		return nil, errors.New("tailscale-lite: Device is required")
 	}
@@ -121,7 +126,6 @@ func New(cfg Config) (_ *Client, err error) {
 	}
 	c.dialer = tsdial.NewDialer(c.monitor)
 	c.dialer.Logf = cfg.Logf
-	c.dialer.Underlay = cfg.Underlay
 	c.dialer.SetBus(c.bus)
 	h := health.NewTracker(c.bus)
 	c.engine, err = wgengine.NewUserspaceEngine(cfg.Logf, wgengine.Config{

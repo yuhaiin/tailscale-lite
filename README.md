@@ -16,7 +16,7 @@ client, err := tailscalelite.New(tailscalelite.Config{
     StatePath: "/private/path/tailnet.json",
     AuthKey: authKey,
     ControlURL: controlURL,
-    Underlay: underlay,
+    // Underlay: nil, // custom underlay currently rejected, no silent fallback
     OnAddresses: configureLightweightStack,
 })
 if err != nil { return err }
@@ -25,7 +25,7 @@ if err := client.WaitReady(ctx); err != nil { return err }
 // TCP/UDP sockets belong to the caller's lightweight stack, not this library.
 ```
 
-The explicit `Underlay` is the fork's per-instance transport contract: control HTTP/Noise, DERP, STUN, and WireGuard discovery must use the supplied dial and UDP socket functions. No process-global dial override is installed.
+**Upstream-only transport limitation:** This module now uses unmodified official `tailscale.com` with **no Go module `replace`**. The old fork-specific instance-scoped `netns.Underlay` API is not upstream. To avoid breaking Yuhaiin's outbound isolation, `New` rejects non-nil `Underlay` with `ErrCustomUnderlayUnsupported` rather than silently falling back to system sockets. With `Underlay: nil`, upstream Tailscale uses its normal system-network transport. Consequently **this branch is not ready for integration into Yuhaiin's custom outbound** until independent injection hooks are implemented and exercised through end-to-end tests.
 
 ### Current guarantees and restrictions
 
@@ -44,7 +44,7 @@ GOFLAGS='-tags=ts_omit_netstack,ts_omit_gro' go test -race ./...
 GOFLAGS='-tags=ts_omit_netstack,ts_omit_gro' go list -deps ./... | grep '^gvisor.dev/gvisor' && exit 1
 ```
 
-Tailscale's currently pinned fork is the same one used by Yuhaiin. Upstream code is retained through standard Go module dependencies rather than copied into this repository. Follow the BSD-3-Clause upstream license for Tailscale and relevant dependency licenses.
+This module pins the official upstream Tailscale commit `e9d5cdc3231e` via a direct `tailscale.com` requirement. The old Asutorufa fork and module-level `replace` are not used. Follow the BSD-3-Clause upstream license for Tailscale and relevant dependency licenses.
 
 ## Design
 
