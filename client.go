@@ -40,6 +40,10 @@ type Config struct {
 	ControlURL string
 	StatePath  string
 	Underlay   *netns.Underlay
+	// RequireUnderlay prohibits falling back to the host network.
+	// Set this for embedded proxy use where every control/DERP/UDP socket
+	// must follow the host's outbound routing policy.
+	RequireUnderlay bool
 	Logf       logger.Logf
 	// OnAddresses configures the host IP stack with addresses assigned by control.
 	// It is invoked before the first WireGuard configuration is applied.
@@ -83,6 +87,9 @@ type Client struct {
 // authorized NetMap. A host-supplied Device is mandatory; nil would silently
 // create Tailscale's fake TUN and black-hole application packets.
 func New(cfg Config) (_ *Client, err error) {
+	if err := validateUnderlay(cfg); err != nil {
+		return nil, err
+	}
 	if cfg.Device == nil {
 		return nil, errors.New("tailscale-lite: Device is required")
 	}
