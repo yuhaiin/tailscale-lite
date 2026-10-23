@@ -21,7 +21,6 @@ import (
  "tailscale.com/tailcfg"
  "tailscale.com/types/key"
  "tailscale.com/types/logger"
- "tailscale.com/types/netmap"
  "tailscale.com/util/eventbus"
  "tailscale.com/util/usermetric"
  "tailscale.com/wgengine"
@@ -193,6 +192,7 @@ func (c *Client) WaitReady(ctx context.Context) error {
   c.mu.Lock();defer c.mu.Unlock()
   if c.closed{return errors.New("tailscale-lite: closed")}
   if c.status.Error!=""{return errors.New(c.status.Error)}
+  if !c.status.Ready{return errors.New("tailscale-lite: not ready")}
   return nil
  }
 }
