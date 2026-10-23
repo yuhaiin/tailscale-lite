@@ -11,6 +11,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   analyze:
     runs-on: ubuntu-latest
@@ -20,6 +24,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+          cache: false
           cache: true
       - name: Install pinned analyzer
         run: go install github.com/Zxilly/go-size-analyzer/cmd/gsa@v1.14.0

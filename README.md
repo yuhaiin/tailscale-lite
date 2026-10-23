@@ -49,3 +49,21 @@ Tailscale's currently pinned fork is the same one used by Yuhaiin. Upstream code
 ## Design
 
 See [docs/architecture.md](docs/architecture.md).
+
+### Custom underlay isolation
+
+Production embedding in Yuhaiin must set `RequireUnderlay: true` and provide
+`Underlay` with `DialContext`, `PacketListener`, and `DNSCache`.
+`New` rejects missing or incomplete transports **before opening network sockets**.
+The fork's per-instance underlay hooks are currently required; do not remove
+the `tailscale.com` replacement unless equivalent complete transport injection
+is implemented and tested. This module is not a complete replacement for tsnet yet.
+
+### Binary size analysis
+
+The [gsa workflow](.github/workflows/size.yml) builds the lite client and
+legacy tsnet under the same Go version, then attempts to profile the current
+Yuhaiin Linux binary. See [size report guide](docs/size-analysis.md). The
+presence of `gvisor.dev/gvisor` in `go.mod` alone is not evidence that its
+symbols were linked; consult the dependency check and gsa's linked-package
+sizes. Comparisons are meaningful only within matched build flags/platforms.
