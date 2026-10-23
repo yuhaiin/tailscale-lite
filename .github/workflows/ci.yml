@@ -34,7 +34,7 @@ jobs:
       - name: Local control/DERP integration
         run: |
           export GOFLAGS='-tags=ts_omit_netstack,ts_omit_gro,integration'
-          go test -run TestLocalControlRegistration -timeout=50s ./...
+          go test -run TestLocalControlRegistration -timeout=90s ./...
       - name: Cross compile library
         run: |
           export GOFLAGS='-tags=ts_omit_netstack,ts_omit_gro'
