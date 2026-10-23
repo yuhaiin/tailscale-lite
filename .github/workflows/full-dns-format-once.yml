@@ -1,0 +1,29 @@
+name: One-shot full DNS formatter
+on:
+  push:
+    branches: [feat/initial-tailnet-client]
+    paths:
+      - .github/workflows/full-dns-format-once.yml
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Format Go DNS files
+        shell: bash
+        run: |
+          set -euo pipefail
+          gofmt -w client.go full_dns.go apply.go session.go
+          go mod tidy
+          git add client.go full_dns.go apply.go session.go go.mod go.sum
+          if git diff --cached --quiet; then exit 0; fi
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'style: format full DNS manager integration'
+          git push origin HEAD:feat/initial-tailnet-client
