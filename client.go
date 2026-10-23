@@ -10,11 +10,14 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"net"
 	"sync"
 
 	"github.com/tailscale/wireguard-go/tun"
 	"tailscale.com/control/controlclient"
 	"tailscale.com/health"
+	"tailscale.com/net/dns"
+	"tailscale.com/net/tsaddr"
 	"tailscale.com/net/netmon"
 	"tailscale.com/net/netns"
 	"tailscale.com/net/tsdial"
@@ -50,6 +53,11 @@ type Config struct {
 	OnAddresses func([]netip.Prefix) error
 	// DisableSubnetRoutes restricts outbound route lookup to exact peer IPs.
 	DisableSubnetRoutes bool
+	// TailnetDialTCP/UDP connect to peer or subnet-resolver IPs through the
+	// host's userspace stack. Required for DNS resolvers inside a Tailnet.
+	// They are never used for off-Tailnet upstreams, which use Underlay.
+	TailnetDialTCP func(context.Context, netip.AddrPort) (net.Conn, error)
+	TailnetDialUDP func(context.Context, netip.AddrPort) (net.Conn, error)
 }
 
 // Status is an immutable, non-secret snapshot. It never contains auth keys.
@@ -77,6 +85,7 @@ type Client struct {
 	monitor      *netmon.Monitor
 	bus          *eventbus.Bus
 	dialer       *tsdial.Dialer
+	dns          *dns.Manager
 	stateRelease func()
 	ready        chan struct{}
 	readyOnce    sync.Once
@@ -141,6 +150,34 @@ func New(cfg Config) (_ *Client, err error) {
 	c.dialer.Logf = cfg.Logf
 	c.dialer.Underlay = cfg.Underlay
 	c.dialer.SetBus(c.bus)
+	// Routes are consulted dynamically on each lookup. In particular the
+	// fixed Tailnet service ranges must *never* leak to host DNS/network
+	// sockets merely because control briefly removed the peer route.
+	c.dialer.UseNetstackForIP = func(ip netip.Addr) bool {
+		if tsaddr.IsTailscaleIP(ip) {
+			return true
+		}
+		_, ok := c.Route(ip)
+		return ok
+	}
+	c.dialer.NetstackDialTCP = func(ctx context.Context, addr netip.AddrPort) (net.Conn, error) {
+		if cfg.TailnetDialTCP == nil {
+			return nil, errors.New("tailscale-lite: missing host Tailnet TCP dialer")
+		}
+		if _, ok := c.Route(addr.Addr()); !ok {
+			return nil, errors.New("tailscale-lite: unauthorized Tailnet TCP destination")
+		}
+		return cfg.TailnetDialTCP(ctx, addr)
+	}
+	c.dialer.NetstackDialUDP = func(ctx context.Context, addr netip.AddrPort) (net.Conn, error) {
+		if cfg.TailnetDialUDP == nil {
+			return nil, errors.New("tailscale-lite: missing host Tailnet UDP dialer")
+		}
+		if _, ok := c.Route(addr.Addr()); !ok {
+			return nil, errors.New("tailscale-lite: unauthorized Tailnet UDP destination")
+		}
+		return cfg.TailnetDialUDP(ctx, addr)
+	}
 	h := health.NewTracker(c.bus)
 	var wrappedTun *tstun.Wrapper
 	c.engine, err = wgengine.NewUserspaceEngine(cfg.Logf, wgengine.Config{
@@ -153,6 +190,8 @@ func New(cfg Config) (_ *Client, err error) {
 				c.magic = sub
 			case *tstun.Wrapper:
 				wrappedTun = sub
+			case *dns.Manager:
+				c.dns = sub
 			}
 		},
 	})
@@ -161,11 +200,11 @@ func New(cfg Config) (_ *Client, err error) {
 		c.bus.Close()
 		return nil, fmt.Errorf("wireguard engine: %w", err)
 	}
-	if c.magic == nil || wrappedTun == nil {
+	if c.magic == nil || wrappedTun == nil || c.dns == nil {
 		c.engine.Close()
 		c.monitor.Close()
 		c.bus.Close()
-		return nil, errors.New("tailscale-lite: engine did not expose magicsock and TUN wrapper")
+		return nil, errors.New("tailscale-lite: engine did not expose magicsock, DNS, and TUN subsystems")
 	}
 	c.engine.SetPeerByIPPacketFunc(c.lookupPeerKey)
 	c.engine.SetPeerForIPFunc(c.lookupPeer)
