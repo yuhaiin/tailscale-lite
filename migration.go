@@ -55,7 +55,7 @@ func MigrateLegacyState(legacyPath, litePath, controlURL string) error {
 		return errors.New("tailscale-lite: invalid selected profile key")
 	}
 	type profile struct {
-		Key string
+		Key        string
 		ControlURL string
 	}
 	var known map[string]profile
@@ -92,8 +92,8 @@ func MigrateLegacyState(legacyPath, litePath, controlURL string) error {
 	}
 	var prefs struct {
 		ControlURL string
-		Persist *persist.Persist
-		LoggedOut bool
+		Persist    *persist.Persist
+		LoggedOut  bool
 	}
 	if err := json.Unmarshal(profileData, &prefs); err != nil {
 		return fmt.Errorf("decode selected legacy profile: %w", err)
@@ -112,8 +112,8 @@ func MigrateLegacyState(legacyPath, litePath, controlURL string) error {
 		return fmt.Errorf("create migrated backend log ID: %w", err)
 	}
 	return writeState(litePath, diskState{
-		MachineKey: machine,
-		Persist: *prefs.Persist,
+		MachineKey:   machine,
+		Persist:      *prefs.Persist,
 		BackendLogID: id.Public().String(),
 	})
 }
