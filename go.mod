@@ -2,7 +2,7 @@ module github.com/yuhaiin/tailscale-lite
 
 go 1.27.2
 
-replace tailscale.com => github.com/Asutorufa/tailscale v0.0.0-20261016051747-4441c394b330
+replace tailscale.com => github.com/Asutorufa/tailscale v0.0.0-20261023110941-4f3024ad7b04
 
 require (
 	github.com/tailscale/wireguard-go v0.0.0-20261002162406-18e99eba5393
