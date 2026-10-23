@@ -153,7 +153,7 @@ func New(cfg Config) (_ *Client, err error) {
 		Persist:              state.Persist,
 		GetMachinePrivateKey: func() (key.MachinePrivate, error) { return state.MachineKey, nil },
 		ServerURL:            cfg.ControlURL, AuthKey: cfg.AuthKey,
-		Hostinfo:       &tailcfg.Hostinfo{Hostname: cfg.Hostname},
+		Hostinfo:       &tailcfg.Hostinfo{Hostname: cfg.Hostname, BackendLogID: state.BackendLogID},
 		DiscoPublicKey: c.magic.DiscoPublicKey(),
 		Dialer:         c.dialer, Bus: c.bus, HealthTracker: h, Logf: cfg.Logf, Observer: c,
 	})
