@@ -24,6 +24,7 @@ func(c *Client)applyNetMap(nm *netmap.NetworkMap) error {
   f:=filter.NewAllowNone(c.cfg.Logf,nil)
   c.mu.Lock()
   c.routes=newRouteTable()
+  c.names=newNameTable("")
   c.status.Ready=false
   c.mu.Unlock()
   c.engine.SetFilter(f)
@@ -41,6 +42,7 @@ func(c *Client)applyNetMap(nm *netmap.NetworkMap) error {
  if len(addrs)==0{return deny(errors.New("tailscale-lite: control supplied no local addresses"))}
  newRoutes,err:=buildRoutes(nm,c.cfg.DisableSubnetRoutes)
  if err!=nil{return deny(err)}
+ newNames:=buildNames(nm,newRoutes)
  localBuilder:=new(netipx.IPSetBuilder)
  for _,p:=range addrs {
   if !p.IsValid() || !p.IsSingleIP(){return deny(fmt.Errorf("tailscale-lite: invalid local address %s",p))}
@@ -68,6 +70,7 @@ func(c *Client)applyNetMap(nm *netmap.NetworkMap) error {
  c.mu.Lock()
  old:=c.routes
  c.routes=newRoutes
+ c.names=newNames
  priv:=c.state.Persist.PrivateNodeKey
  c.mu.Unlock()
  if priv.IsZero(){return deny(errors.New("tailscale-lite: no registered private node key"))}
