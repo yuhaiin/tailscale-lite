@@ -1,0 +1,116 @@
+name: Binary size profile (gsa)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/initial-tailnet-client
+    paths:
+      - .github/workflows/size.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Install pinned analyzer
+        run: go install github.com/Zxilly/go-size-analyzer/cmd/gsa@v1.14.0
+      - name: Build comparable linkage probes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p size-results
+          cat > "$RUNNER_TEMP/lite-main.go" <<'EOF'
+          package main
+          import (
+            "os"
+            lite "github.com/yuhaiin/tailscale-lite"
+          )
+          func main() {
+            if len(os.Args) > 1 {
+              c, err := lite.New(lite.Config{StatePath: os.Args[1]})
+              if err == nil { _ = c.Close() }
+            }
+          }
+          EOF
+          cat > "$RUNNER_TEMP/tsnet-main.go" <<'EOF'
+          package main
+          import (
+            "os"
+            "tailscale.com/tsnet"
+          )
+          func main() {
+            if len(os.Args) > 1 {
+              s := &tsnet.Server{Dir: os.Args[1]}
+              if err := s.Start(); err == nil { _ = s.Close() }
+            }
+          }
+          EOF
+          CGO_ENABLED=0 go build -mod=mod -tags=ts_omit_netstack,ts_omit_gro -o size-results/lite "$RUNNER_TEMP/lite-main.go"
+          CGO_ENABLED=0 go build -mod=mod -o size-results/tsnet "$RUNNER_TEMP/tsnet-main.go"
+          stat -c '%n %s bytes' size-results/lite size-results/tsnet | tee size-results/sizes.txt
+          CGO_ENABLED=0 go build -mod=mod -tags=ts_omit_netstack,ts_omit_gro -ldflags='-s -w' -o size-results/lite-stripped "$RUNNER_TEMP/lite-main.go"
+          CGO_ENABLED=0 go build -mod=mod -ldflags='-s -w' -o size-results/tsnet-stripped "$RUNNER_TEMP/tsnet-main.go"
+          stat -c '%n %s bytes' size-results/*stripped | tee -a size-results/sizes.txt
+      - name: Analyze linked package sizes
+        shell: bash
+        run: |
+          set -euo pipefail
+          for binary in lite tsnet; do
+            gsa -f text --hide-sections --hide-std "size-results/$binary" > "size-results/$binary-gsa.txt"
+            gsa -f json --compact -o "size-results/$binary-gsa.json" "size-results/$binary"
+            echo "::group::$binary top packages"
+            sed -n '1,75p' "size-results/$binary-gsa.txt"
+            echo "::endgroup::"
+          done
+          gsa size-results/tsnet size-results/lite -f text > size-results/compare.txt
+          echo "::group::tsnet versus lite"
+          sed -n '1,80p' size-results/compare.txt
+          echo "::endgroup::"
+      - name: Checkout yuhaiin main for whole-program baseline
+        uses: actions/checkout@v4
+        with:
+          repository: yuhaiin/yuhaiin
+          ref: main
+          path: yuhaiin
+      - name: Build and profile actual yuhaiin binary (best effort)
+        shell: bash
+        run: |
+          set -u
+          cd yuhaiin
+          CGO_ENABLED=0 go build -mod=mod -o ../size-results/yuhaiin ./cmd/yuhaiin
+          result=$?
+          cd ..
+          if [ "$result" != 0 ]; then
+            echo "Full yuhaiin CGO-disabled build unavailable in this environment (exit $result)." | tee size-results/yuhaiin-build-note.txt
+            exit 0
+          fi
+          stat -c '%n %s bytes' size-results/yuhaiin | tee -a size-results/sizes.txt
+          gsa -f text --hide-sections --hide-std size-results/yuhaiin > size-results/yuhaiin-gsa.txt
+          gsa -f json --compact -o size-results/yuhaiin-gsa.json size-results/yuhaiin
+          echo "::group::actual yuhaiin binary top packages"
+          sed -n '1,95p' size-results/yuhaiin-gsa.txt
+          echo "::endgroup::"
+      - name: Upload inspectable size data
+        uses: actions/upload-artifact@v4
+        with:
+          name: tailscale-lite-size-gsa
+          path: |
+            size-results/sizes.txt
+            size-results/*-gsa.txt
+            size-results/*-gsa.json
+            size-results/compare.txt
+            size-results/yuhaiin-build-note.txt
+          retention-days: 14
