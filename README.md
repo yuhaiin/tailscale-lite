@@ -35,7 +35,8 @@ The explicit `Underlay` is the fork's per-instance transport contract: control H
 - Missing/invalid mapping, expired keys and Tailnet Lock requirements are intended to fail closed.
 - All IPv4/IPv6 application sockets are handled by the host stack; this module has no DNS listener.
 - Peers are initially filtered for expiration, jail and unsigned-only access; the remaining Tailscale capability/TKA semantics require further validation.
-- Unimplemented: TKA verification, fully integrated MagicDNS and production interoperability testing. Selected legacy `tailscaled.state` machine and node identities can be migrated with `MigrateLegacyState`; malformed or ambiguous profiles fail closed.
+- The embedded Tailscale DNS Manager handles MagicDNS A/AAAA/PTR, ExtraRecords, search domains, Split DNS and control-configured default resolvers. The host exposes the TCP/UDP DNS service (for Yuhaiin, `100.100.100.100:53`) via `Client.QueryDNS` and `Client.HandleDNSConn`; DNS upstreams outside the Tailnet use the instance's injected Underlay and approved Tailnet DNS servers use host-supplied lightweight TCP/UDP callbacks. This module does not create an OS DNS listener or overwrite system DNS.
+- Unimplemented: TKA verification and full production interoperability testing. Selected legacy `tailscaled.state` machine and node identities can be migrated with `MigrateLegacyState`; malformed or ambiguous profiles fail closed.
 
 ### Development
 
