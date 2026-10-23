@@ -63,6 +63,7 @@ type Client struct {
  cfg Config
  status Status
  routes *routeTable
+ names *nameTable
  state diskState
  control *controlclient.Auto
  engine wgengine.Engine
@@ -89,7 +90,7 @@ func New(cfg Config) (_ *Client, err error) {
   state.MachineKey = key.NewMachine()
   if err := writeState(cfg.StatePath, state); err != nil { return nil, err }
  }
- c := &Client{cfg:cfg,state:state,ready:make(chan struct{}),routes:newRouteTable()}
+ c := &Client{cfg:cfg,state:state,ready:make(chan struct{}),routes:newRouteTable(),names:newNameTable("")}
  c.bus = eventbus.New()
  c.monitor, err = netmon.New(c.bus,cfg.Logf)
  if err != nil { c.bus.Close();return nil, fmt.Errorf("netmon: %w",err) }
