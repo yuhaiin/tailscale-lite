@@ -72,26 +72,26 @@ type Status struct {
 
 // Client owns one independent control session and WireGuard engine.
 type Client struct {
-	mu                sync.Mutex
-	applyMu           sync.Mutex
-	cfg               Config
-	status            Status
-	routes            *routeTable
-	names             *nameTable
-	state             diskState
-	control           *controlclient.Auto
-	engine            wgengine.Engine
-	magic             *magicsock.Conn
-	monitor           *netmon.Monitor
-	bus               *eventbus.Bus
-	dialer            *tsdial.Dialer
-	dns               *dns.Manager
-	stateRelease      func()
-	ready             chan struct{}
-	readyOnce         sync.Once
-	transportReady    chan struct{}
-	transportReadySet bool
-	closed            bool
+	mu              sync.Mutex
+	applyMu         sync.Mutex
+	cfg             Config
+	status          Status
+	routes          *routeTable
+	names           *nameTable
+	state           diskState
+	control         *controlclient.Auto
+	engine          wgengine.Engine
+	magic           *magicsock.Conn
+	monitor         *netmon.Monitor
+	bus             *eventbus.Bus
+	dialer          *tsdial.Dialer
+	dns             *dns.Manager
+	stateRelease    func()
+	ready           chan struct{}
+	readyOnce       sync.Once
+	netInfoReady    chan struct{}
+	netInfoReadySet bool
+	closed          bool
 }
 
 // New starts an isolated Tailnet client. Call WaitReady to wait for an
@@ -142,7 +142,7 @@ func New(cfg Config) (_ *Client, err error) {
 		}
 	}
 	c := &Client{
-		cfg: cfg, state: state, ready: make(chan struct{}), transportReady: make(chan struct{}),
+		cfg: cfg, state: state, ready: make(chan struct{}), netInfoReady: make(chan struct{}),
 		routes: newRouteTable(), names: newNameTable(""), stateRelease: release,
 	}
 	c.bus = eventbus.New()
@@ -245,6 +245,12 @@ func New(cfg Config) (_ *Client, err error) {
 		c.mu.Unlock()
 		if !closed && ctl != nil {
 			ctl.SetNetInfo(ni)
+			c.mu.Lock()
+			if !c.closed && !c.netInfoReadySet {
+				c.netInfoReadySet = true
+				close(c.netInfoReady)
+			}
+			c.mu.Unlock()
 		}
 	})
 	c.engine.SetStatusCallback(func(s *wgengine.Status, e error) {
@@ -257,14 +263,6 @@ func New(cfg Config) (_ *Client, err error) {
 		c.mu.Unlock()
 		if !closed && control != nil {
 			control.UpdateEndpoints(s.LocalAddrs)
-			if len(s.LocalAddrs) > 0 || s.DERPs > 0 {
-				c.mu.Lock()
-				if !c.closed && c.status.Ready && !c.transportReadySet {
-					c.transportReadySet = true
-					close(c.transportReady)
-				}
-				c.mu.Unlock()
-			}
 		}
 	})
 	// Tailscale corks all TUN queues until the caller wires up its
@@ -356,9 +354,9 @@ func (c *Client) WaitReady(ctx context.Context) error {
 }
 
 // WaitTransportReady waits until the initial NetMap is applied and magicsock
-// has discovered at least one direct endpoint or connected to a DERP relay.
-// This lets callers avoid exposing a newly registered peer route before the
-// client has a network path to send the first WireGuard handshake.
+// has completed and reported its initial network check to control. This keeps
+// callers from exposing a new peer route before control has the local DERP
+// region and endpoint information needed to route the first WireGuard handshake.
 func (c *Client) WaitTransportReady(ctx context.Context) error {
 	if err := c.WaitReady(ctx); err != nil {
 		return err
@@ -368,21 +366,17 @@ func (c *Client) WaitTransportReady(ctx context.Context) error {
 		c.mu.Unlock()
 		return errors.New("tailscale-lite: closed")
 	}
-	engine := c.engine
 	c.mu.Unlock()
-	if engine != nil {
-		engine.RequestStatus()
-	}
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-c.transportReady:
+	case <-c.netInfoReady:
 		c.mu.Lock()
 		defer c.mu.Unlock()
 		if c.closed {
 			return errors.New("tailscale-lite: closed")
 		}
-		if !c.transportReadySet {
+		if !c.netInfoReadySet {
 			return errors.New("tailscale-lite: closed")
 		}
 		if !c.status.Ready {
@@ -427,8 +421,8 @@ func (c *Client) Close() error {
 	release := c.stateRelease
 	c.stateRelease = nil
 	c.readyOnce.Do(func() { close(c.ready) })
-	if !c.transportReadySet {
-		close(c.transportReady)
+	if !c.netInfoReadySet {
+		close(c.netInfoReady)
 	}
 	c.mu.Unlock()
 	c.applyMu.Unlock()
