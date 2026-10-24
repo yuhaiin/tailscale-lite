@@ -9,6 +9,7 @@ import (
 // deactivateNetMap is called with applyMu held, never with Client.mu held.
 // Packet policy is removed before peer and route ownership is discarded.
 func (c *Client) deactivateNetMap() {
+	c.stopExpiryTimer()
 	// An old manager snapshot must not keep resolving or forwarding once
 	// control revokes this node. The resolver clears its own routes first.
 	if c.dns != nil {

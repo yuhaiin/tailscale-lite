@@ -45,6 +45,7 @@ func legacyFixture(t *testing.T, dir string, selected, controlURL string) (strin
 	if err := os.WriteFile(path, b, 0600); err != nil {
 		t.Fatal(err)
 	}
+	makeStatePrivate(t, path)
 	return path, machine, node
 }
 
@@ -63,8 +64,11 @@ func TestMigrateLegacyStatePreservesIdentity(t *testing.T) {
 		t.Fatal("migrated machine or node identity changed")
 	}
 	fi, err := os.Lstat(next)
-	if err != nil || fi.Mode().Perm() != 0600 {
+	if err != nil {
 		t.Fatalf("migrated identity permissions: %v, %v", fi, err)
+	}
+	if err := checkPrivateFile(next, fi); err != nil {
+		t.Fatal(err)
 	}
 	if _, err := os.ReadFile(old); err != nil {
 		t.Fatal("original state was removed", err)
@@ -102,18 +106,14 @@ func TestMigrateLegacyStateRejectsWorldReadableAndSymlinks(t *testing.T) {
 	dir := t.TempDir()
 	old, _, _ := legacyFixture(t, dir, "profile-A", "https://control.example")
 	next := filepath.Join(dir, "lite.json")
-	if err := os.Chmod(old, 0644); err != nil {
-		t.Fatal(err)
-	}
+	makeStatePublic(t, old)
 	if err := MigrateLegacyState(old, next, "https://control.example"); err == nil {
 		t.Fatal("world readable legacy identity accepted")
 	}
-	if err := os.Chmod(old, 0600); err != nil {
-		t.Fatal(err)
-	}
+	makeStatePrivate(t, old)
 	link := filepath.Join(dir, "linked-state")
 	if err := os.Symlink(old, link); err != nil {
-		t.Fatal(err)
+		t.Skip(err)
 	}
 	if err := MigrateLegacyState(link, next, "https://control.example"); err == nil {
 		t.Fatal("symlink legacy identity accepted")

@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/netip"
 	"sync"
+	"time"
 
 	"github.com/tailscale/wireguard-go/tun"
 	"tailscale.com/control/controlclient"
@@ -26,6 +27,7 @@ import (
 	"tailscale.com/types/key"
 	"tailscale.com/types/logger"
 	"tailscale.com/types/logid"
+	"tailscale.com/types/netmap"
 	"tailscale.com/util/eventbus"
 	"tailscale.com/util/usermetric"
 	"tailscale.com/wgengine"
@@ -92,6 +94,11 @@ type Client struct {
 	transportReady    chan struct{}
 	transportReadySet bool
 	closed            bool
+
+	// Expiry state is serialized with NetMap application and Close by applyMu.
+	expiryTimer      *time.Timer
+	expiryGeneration uint64
+	latestNetMap     *netmap.NetworkMap
 }
 
 // New starts an isolated Tailnet client. Call WaitReady to wait for an
@@ -418,6 +425,7 @@ func (c *Client) Close() error {
 		return nil
 	}
 	c.closed = true
+	c.stopExpiryTimer()
 	ctl := c.control
 	engine := c.engine
 	monitor := c.monitor

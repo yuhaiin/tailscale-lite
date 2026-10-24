@@ -32,8 +32,11 @@ func MigrateLegacyState(legacyPath, litePath, controlURL string) error {
 	if err != nil {
 		return fmt.Errorf("check legacy identity: %w", err)
 	}
-	if !fi.Mode().IsRegular() || fi.Mode().Perm()&0077 != 0 {
+	if !fi.Mode().IsRegular() {
 		return errors.New("tailscale-lite: legacy state must be a private regular file (0600)")
+	}
+	if err := checkPrivateFile(legacyPath, fi); err != nil {
+		return fmt.Errorf("legacy identity permissions: %w", err)
 	}
 	content, err := os.ReadFile(legacyPath)
 	if err != nil {

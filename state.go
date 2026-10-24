@@ -30,8 +30,11 @@ func readState(path string) (diskState, error) {
 	if err != nil {
 		return s, fmt.Errorf("stat identity: %w", err)
 	}
-	if !fi.Mode().IsRegular() || fi.Mode().Perm()&0077 != 0 {
+	if !fi.Mode().IsRegular() {
 		return s, errors.New("tailscale-lite: state must be a private regular file (0600)")
+	}
+	if err := checkPrivateFile(path, fi); err != nil {
+		return s, fmt.Errorf("identity permissions: %w", err)
 	}
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -58,7 +61,7 @@ func writeState(path string, s diskState) error {
 	}
 	name := f.Name()
 	defer os.Remove(name)
-	if err = f.Chmod(0600); err != nil {
+	if err = secureStateFile(f); err != nil {
 		f.Close()
 		return err
 	}
