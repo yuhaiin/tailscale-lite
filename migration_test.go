@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"tailscale.com/ipn"
 	"tailscale.com/types/key"
 	"tailscale.com/types/persist"
 )
@@ -17,10 +18,7 @@ func legacyFixture(t *testing.T, dir string, selected, controlURL string) (strin
 	if err != nil {
 		t.Fatal(err)
 	}
-	prefs, err := json.Marshal(struct {
-		ControlURL string
-		Persist    *persist.Persist
-	}{ControlURL: controlURL, Persist: &persist.Persist{PrivateNodeKey: node}})
+	prefs, err := json.Marshal(ipn.Prefs{ControlURL: controlURL, Persist: &persist.Persist{PrivateNodeKey: node}})
 	if err != nil {
 		t.Fatal(err)
 	}

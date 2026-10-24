@@ -95,7 +95,7 @@ func MigrateLegacyState(legacyPath, litePath, controlURL string) error {
 	}
 	var prefs struct {
 		ControlURL string
-		Persist    *persist.Persist
+		Persist    *persist.Persist `json:"Config"`
 		LoggedOut  bool
 	}
 	if err := json.Unmarshal(profileData, &prefs); err != nil {

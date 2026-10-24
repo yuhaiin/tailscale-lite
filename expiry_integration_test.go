@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/dns/dnsmessage"
 	"tailscale.com/control/controlclient"
 	"tailscale.com/tailcfg"
 	"tailscale.com/types/key"
@@ -58,13 +59,35 @@ func TestKeyExpiryWithoutControlUpdate(t *testing.T) {
 			if ips, _ := c.LookupIP(peer.Name); len(ips) == 0 {
 				t.Fatal("initial peer DNS missing")
 			}
+			query := dnsmessage.Message{Header: dnsmessage.Header{ID: 1}, Questions: []dnsmessage.Question{{Name: dnsmessage.MustNewName(peer.Name), Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET}}}
+			packet, err := query.Pack()
+			if err != nil {
+				t.Fatal(err)
+			}
+			queryAddresses := func() (int, error) {
+				ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+				defer cancel()
+				wire, err := c.QueryDNS(ctx, packet, "udp", netip.AddrPort{})
+				if err != nil {
+					return 0, err
+				}
+				var reply dnsmessage.Message
+				if err := reply.Unpack(wire); err != nil {
+					return 0, err
+				}
+				return len(reply.Answers), nil
+			}
+			if n, err := queryAddresses(); err != nil || n != 1 {
+				t.Fatalf("initial full DNS response: %d %v", n, err)
+			}
 			<-time.After(time.Until(expires))
 			// Allow the expiry callback to remove engine peers and DNS.
 			deadline := time.Now().Add(2 * time.Second)
 			for {
 				_, authorized := c.Route(peerIP)
 				ips, _ := c.LookupIP(peer.Name)
-				if !authorized && len(ips) == 0 {
+				dnsAnswers, dnsErr := queryAddresses()
+				if !authorized && len(ips) == 0 && dnsAnswers == 0 && (which != "self" || dnsErr != nil) {
 					break
 				}
 				if time.Now().After(deadline) {
