@@ -47,6 +47,10 @@ jobs:
         run: |
           export GOFLAGS='-tags=ts_omit_netstack,ts_omit_gro'
           go test -race -count=2 -run TestUserDialWithoutRoutesHonorsExplicitUnderlay tailscale.com/net/tsdial
+      - name: Validate initial endpoint update synchronization
+        env:
+          GOFLAGS: '-tags=ts_omit_netstack,ts_omit_gro'
+        run: go test -race -count=20 -run '^TestAwaitEndpointUpdates$' tailscale.com/wgengine/magicsock
       - name: Local control/DERP integration
         run: |
           export GOFLAGS='-tags=ts_omit_netstack,ts_omit_gro,integration'
