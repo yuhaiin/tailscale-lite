@@ -383,17 +383,23 @@ func (c *Client) WaitTransportReady(ctx context.Context) error {
 		return ctx.Err()
 	case <-c.transportReady:
 		c.mu.Lock()
-		defer c.mu.Unlock()
 		if c.closed {
+			c.mu.Unlock()
 			return errors.New("tailscale-lite: closed")
 		}
 		if !c.transportReadySet {
+			c.mu.Unlock()
 			return errors.New("tailscale-lite: closed")
 		}
 		if !c.status.Ready {
+			c.mu.Unlock()
 			return errors.New("tailscale-lite: not ready")
 		}
-		return nil
+		c.mu.Unlock()
+		if err := c.magic.AwaitEndpointUpdates(ctx); err != nil {
+			return err
+		}
+		return c.WaitReady(ctx)
 	}
 }
 

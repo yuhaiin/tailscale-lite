@@ -77,6 +77,9 @@ func secureStateFile(f *os.File) error {
 	if err != nil {
 		return err
 	}
-	return windows.SetSecurityInfo(windows.Handle(f.Fd()), windows.SE_FILE_OBJECT,
+	// os.CreateTemp's handle lacks WRITE_DAC. SetNamedSecurityInfo opens
+	// the ACL handle with that right. Go's open file denies shared delete,
+	// keeping this name attached to the same file until it is closed.
+	return windows.SetNamedSecurityInfo(f.Name(), windows.SE_FILE_OBJECT,
 		windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, acl, nil)
 }
