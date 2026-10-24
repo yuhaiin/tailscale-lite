@@ -23,6 +23,8 @@ func (c *Client) deactivateNetMap() {
 	c.routes = newRouteTable()
 	c.names = newNameTable("")
 	c.status.Ready = false
+	c.initialEndpointsReady = false
+	c.transportEpoch++
 	c.status.Addresses = nil
 	c.status.PeerCount = 0
 	c.mu.Unlock()

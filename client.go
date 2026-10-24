@@ -74,26 +74,28 @@ type Status struct {
 
 // Client owns one independent control session and WireGuard engine.
 type Client struct {
-	mu                sync.Mutex
-	applyMu           sync.Mutex
-	cfg               Config
-	status            Status
-	routes            *routeTable
-	names             *nameTable
-	state             diskState
-	control           *controlclient.Auto
-	engine            wgengine.Engine
-	magic             *magicsock.Conn
-	monitor           *netmon.Monitor
-	bus               *eventbus.Bus
-	dialer            *tsdial.Dialer
-	dns               *dns.Manager
-	stateRelease      func()
-	ready             chan struct{}
-	readyOnce         sync.Once
-	transportReady    chan struct{}
-	transportReadySet bool
-	closed            bool
+	mu                    sync.Mutex
+	applyMu               sync.Mutex
+	cfg                   Config
+	status                Status
+	routes                *routeTable
+	names                 *nameTable
+	state                 diskState
+	control               *controlclient.Auto
+	engine                wgengine.Engine
+	magic                 *magicsock.Conn
+	monitor               *netmon.Monitor
+	bus                   *eventbus.Bus
+	dialer                *tsdial.Dialer
+	dns                   *dns.Manager
+	stateRelease          func()
+	ready                 chan struct{}
+	readyOnce             sync.Once
+	transportReady        chan struct{}
+	transportReadySet     bool
+	initialEndpointsReady bool
+	transportEpoch        uint64
+	closed                bool
 
 	// Expiry state is serialized with NetMap application and Close by applyMu.
 	expiryTimer      *time.Timer
@@ -369,36 +371,36 @@ func (c *Client) WaitReady(ctx context.Context) error {
 // control has the local DERP region and endpoint information needed to route
 // the first WireGuard handshake.
 func (c *Client) WaitTransportReady(ctx context.Context) error {
-	if err := c.WaitReady(ctx); err != nil {
-		return err
-	}
-	c.mu.Lock()
-	if c.closed {
-		c.mu.Unlock()
-		return errors.New("tailscale-lite: closed")
-	}
-	c.mu.Unlock()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-c.transportReady:
+	for {
+		if err := c.WaitReady(ctx); err != nil {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-c.transportReady:
+		}
 		c.mu.Lock()
-		if c.closed {
+		if c.closed || !c.transportReadySet {
 			c.mu.Unlock()
 			return errors.New("tailscale-lite: closed")
 		}
-		if !c.transportReadySet {
-			c.mu.Unlock()
-			return errors.New("tailscale-lite: closed")
-		}
-		if !c.status.Ready {
-			c.mu.Unlock()
-			return errors.New("tailscale-lite: not ready")
-		}
+		done, epoch := c.initialEndpointsReady, c.transportEpoch
 		c.mu.Unlock()
+		if done {
+			return c.WaitReady(ctx)
+		}
 		if err := c.magic.AwaitEndpointUpdates(ctx); err != nil {
 			return err
 		}
+		c.mu.Lock()
+		if epoch != c.transportEpoch {
+			c.mu.Unlock()
+			continue
+		}
+		c.initialEndpointsReady = !c.closed && c.status.Ready
+		c.mu.Unlock()
+		// Revocation may arrive while endpoint discovery is finishing.
 		return c.WaitReady(ctx)
 	}
 }
