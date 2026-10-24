@@ -425,6 +425,9 @@ func (c *Client) Close() error {
 		return nil
 	}
 	c.closed = true
+	c.status.Ready = false
+	c.status.Addresses = nil
+	c.status.PeerCount = 0
 	c.stopExpiryTimer()
 	ctl := c.control
 	engine := c.engine
