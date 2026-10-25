@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"go4.org/netipx"
-	"tailscale.com/net/dns"
 	"tailscale.com/tailcfg"
 	"tailscale.com/types/netmap"
 	"tailscale.com/wgengine"
@@ -21,17 +20,7 @@ import (
 // based on a partly parsed NetMap. Client.applyMu serializes calls.
 func (c *Client) applyNetMap(nm *netmap.NetworkMap) error {
 	deny := func(err error) error {
-		f := filter.NewAllowNone(c.cfg.Logf, nil)
-		c.mu.Lock()
-		c.routes = newRouteTable()
-		c.names = newNameTable("")
-		c.status.Ready = false
-		c.mu.Unlock()
-		c.engine.SetFilter(f)
-		c.magic.SetFilter(f)
-		if c.dns != nil {
-			_ = c.dns.Set(dns.Config{})
-		}
+		c.deactivateNetMap()
 		return err
 	}
 	if nm == nil || !nm.SelfNode.Valid() {
@@ -40,7 +29,7 @@ func (c *Client) applyNetMap(nm *netmap.NetworkMap) error {
 	if nm.TKAEnabled {
 		return deny(errors.New("tailscale-lite: tailnet lock not yet supported; refusing unverified peers"))
 	}
-	if expiry := nm.SelfNode.KeyExpiry(); !expiry.IsZero() && expiry.Before(time.Now()) {
+	if expiry := nm.SelfNode.KeyExpiry(); !expiry.IsZero() && !expiry.After(time.Now()) {
 		return deny(errors.New("tailscale-lite: local node key has expired"))
 	}
 	addrs := nm.GetAddresses().AsSlice()
@@ -109,5 +98,6 @@ func (c *Client) applyNetMap(nm *netmap.NetworkMap) error {
 	c.status.Addresses = append([]netip.Prefix(nil), addrs...)
 	c.status.PeerCount = len(filtered)
 	c.mu.Unlock()
+	c.scheduleExpiry(nm)
 	return nil
 }

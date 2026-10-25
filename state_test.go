@@ -17,8 +17,8 @@ func TestStateRoundTripAndPermissions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0600 {
-		t.Fatalf("identity permissions: %o", info.Mode().Perm())
+	if err := checkPrivateFile(path, info); err != nil {
+		t.Fatalf("identity permissions: %v", err)
 	}
 	got, err := readState(path)
 	if err != nil {
@@ -27,9 +27,14 @@ func TestStateRoundTripAndPermissions(t *testing.T) {
 	if !got.MachineKey.Equal(s.MachineKey) {
 		t.Fatal("machine key changed")
 	}
-	if err := os.Chmod(path, 0644); err != nil {
+	// Replacing an existing identity must preserve private access and keys.
+	if err := writeState(path, got); err != nil {
 		t.Fatal(err)
 	}
+	if reloaded, err := readState(path); err != nil || !reloaded.MachineKey.Equal(s.MachineKey) {
+		t.Fatalf("identity reload: %v", err)
+	}
+	makeStatePublic(t, path)
 	if _, err := readState(path); err == nil {
 		t.Fatal("insecure identity accepted")
 	}
@@ -64,4 +69,16 @@ func TestStateOwnership(t *testing.T) {
 		t.Fatalf("released state could not be reclaimed: %v", err)
 	}
 	release2()
+}
+
+func makeStatePrivate(t *testing.T, path string) {
+	t.Helper()
+	f, err := os.OpenFile(path, os.O_RDWR, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err := secureStateFile(f); err != nil {
+		t.Fatal(err)
+	}
 }

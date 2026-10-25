@@ -2,11 +2,12 @@ module github.com/yuhaiin/tailscale-lite
 
 go 1.27.2
 
-replace tailscale.com => github.com/Asutorufa/tailscale v0.0.0-20261023110941-4f3024ad7b04
+replace tailscale.com => github.com/Asutorufa/tailscale v0.0.0-20261024171005-32b103289bd3
 
 require (
 	github.com/tailscale/wireguard-go v0.0.0-20261002162406-18e99eba5393
 	go4.org/netipx v0.0.0-20260823151212-3075585bcbeb
+	golang.org/x/sys v0.48.0
 	tailscale.com v1.9999999999.99999999999
 )
 
@@ -42,7 +43,6 @@ require (
 	golang.org/x/exp v0.0.0-20260908205506-85c1c2202aba // indirect
 	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
-	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/time v0.16.0 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
